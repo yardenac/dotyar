@@ -1,0 +1,13 @@
+[user]
+	email = yardenack@gmail.com
+	name  = yar
+
+[alias]
+	glog	= log -30 --pretty='%p..%Cgreen%h%Creset %ad %s' --date=short
+	stiff	= diff --color=auto --cached
+[core]
+	editor = emacs
+	pager = less -+S
+[color]
+	diff = auto
+	interactive = auto

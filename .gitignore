@@ -1,0 +1,8 @@
+.aptitude/cache
+.bash_history
+.emacs-save-*-omni~
+.mysql_history
+.procmailrc.log
+.rnd
+build/
+backup/
