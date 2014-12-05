@@ -1,0 +1,7 @@
+#!/bin/bash
+
+exit # i'm scared...
+
+shopt -s dotglob
+rm -rf ~/*
+git clone https://github.com/yardenac/dotyar.git ~/
