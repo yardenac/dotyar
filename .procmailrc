@@ -1,0 +1,19 @@
+DROPPRIVS=yes
+LOGFILE=$HOME/.procmailrc.log
+VERBOSE=no
+MAILDIR=$HOME/mail
+PATH=/bin:/usr/bin
+TOX='(^TO|^X-Original-To:(.*[^-a-zA-Z0-9_.])?)'
+
+:0fhw
+| formail -I "Delivered-To"
+
+:0
+* ^^rom[ ]
+{
+  :0 fhw
+  | sed -e '1s/^/F/'
+}
+
+:0
+! yardenack@gmail.com
