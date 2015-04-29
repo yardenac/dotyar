@@ -2,6 +2,7 @@
 .bash_history
 .emacs-save-*-omni~
 .mysql_history
+.parallel/tmp/
 .procmailrc.log
 .rnd
 build/
