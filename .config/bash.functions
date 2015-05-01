@@ -859,3 +859,13 @@ nma() {
 dix() {
 	 diff <(grex "$1" | sort) <(grex "$2" | sort)
 }
+fa() { # "find all"
+	 local arg
+	 for arg; do
+		  [ -d "$arg" ] || {
+				echo_red "NOT A DIR: $arg"
+				return 1
+		  }
+	 done
+	 find "$@" \! -type d -exec stat -c %N '{}' \; | awk '{gsub(/[’‘]/,"")}{color = (system("[ -f " $3 " ] ")  == 0) ? "\033[1;36m" : "\033[1;31m"; print $1 " " $2 " " color $3 "\033[22;39m"}'
+}
