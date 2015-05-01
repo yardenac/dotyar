@@ -26,6 +26,7 @@ export HISTIGNORE="&"
 export HISTFILESIZE=999999999999
 export EDITOR=emacs
 export LANG=en_US.UTF-8
+export PATH="$PATH"
 export VISUAL=emacs
 #export GRE_HOME=/tmp
 export PROMPT_COMMAND='history -a'
