@@ -3,7 +3,7 @@
 	name  = yar
 
 [alias]
-	glog	= log -30 --pretty='%p..%Cgreen%h%Creset %ad %s%Cblue%d%Creset' --date=short
+	glog	= log -30 --pretty='%p..%Cgreen%h%Creset %G? %ad %s%Cblue%d%Creset' --date=short
 	stiff	= diff --color=auto --cached
 [core]
 	editor = emacs
