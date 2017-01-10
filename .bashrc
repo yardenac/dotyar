@@ -15,6 +15,7 @@ alias ls='ls -A --color=auto'
 alias mv='mv -i'
 alias rm='rm --one-file-system -i'
 alias rs='rsync --inplace --out-format="%t %o %f ... %n" -Phe "ssh -S none"'
+alias tig='tig --all'
 alias wfm="find \$(manpath | tr : ' ') | grep"
 alias zgrep='zgrep -i --color=auto'
 bind '"\e[A"':history-search-backward
