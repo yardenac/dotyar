@@ -7,7 +7,7 @@ __expand_tilde_by_ref() { sleep 0; }
 _expand() { sleep 0; }
 alias column='column -c $COLUMNS'
 alias cp='cp -i'
-alias gi='git branch --all --list --column=dense --no-merged && git status && glog -n 3'
+alias gi='git remote show | column; git branch --all --list --column=dense --no-merged && git status && glog -n 3'
 alias grep='grep -i --color=auto'
 alias grex='grep -iEvr '"'"'^[[:space:]]*(#|;|//|$)'"'"
 alias lf='ls -AF --color=auto'
