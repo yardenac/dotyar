@@ -5,5 +5,7 @@
 /.parallel/tmp/
 /.procmailrc.log
 /.rnd
+/.tig_history
+/.units_history
 /build/
 /backup/
