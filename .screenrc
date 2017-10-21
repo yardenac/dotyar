@@ -1,5 +1,7 @@
 screen -t htop 0 htop
-screen -t EMACS 1
+screen -t journal 1 journalctl -xfb -0 -n 999
+screen -t EMACS 2
+screen 3
 deflogin on
 autodetach on
 vbell on
