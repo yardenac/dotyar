@@ -38,7 +38,6 @@ set completion-query-items 150
 set page-completions Off
 set print-completions-horizontally On
 set -o noclobber
-setterm -blength 0
 shopt -s histappend
 shopt -s checkwinsize
 stty stop undef
