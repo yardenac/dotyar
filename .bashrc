@@ -14,7 +14,7 @@ alias lf='ls -AF --color=auto'
 alias ls='ls -A --color=auto'
 alias mv='mv -i'
 alias rm='rm --one-file-system -i'
-alias rs='rsync --inplace --out-format="%t %o %f ... %n" -Phe "ssh -S none"'
+alias rs='rsync --inplace --out-format="%t %o %f ... %n" --info=flist0,progress2 --no-i-r --chmod=u+w,Du+x -Phe "ssh -S none"'
 alias tig='tig --all'
 alias wfm="find \$(manpath | tr : ' ') | grep"
 alias zgrep='zgrep -i --color=auto'
