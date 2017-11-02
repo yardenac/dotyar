@@ -125,11 +125,6 @@ set_proper_histfile() {
 	 done
 	 export HISTFILE XAUTHORITY
 }
-check_file() {
-	 [ -a "$1" ] || return 1
-	 local LMD5=$(md5sum "$1" 2>/dev/null)
-	 [ "${LMD5%% *}" = "${2:-NEVERMATCH}" ]
-}
 first_to_exist() {
 	 return 1
 	 #this is fucked up
@@ -282,6 +277,14 @@ clear_line() {
 	 done
 	 echo -ne "\r"
 }
+__git_ps1_cleaner() {
+    [ "$(type -t __git_ps1)" = function ] || {
+        eval "__git_ps1_cleaner() {return;}"
+        return
+    }
+    local s=$(__git_ps1 %s | sed 's/^[a-z0-9-]*//i')
+    echo "${s##* }"
+}
 has_hardstatus() {
 	 # breaks when used first in subshell or with redirected output
 	 # so call it with NO redirections first - it replaces itself :D
@@ -304,7 +307,7 @@ has_hardstatus() {
 appropriate_ps1() {
 	 # remember to call has_hardstatus FIRST with NO redirections or subshell
 	 [ "$TERM" = dumb ] || echo -n '$(comm_front $?)'
-	 echo -n '\u\D{%l%M}$(weekletter)\w\[\e[1;33m\]$(print_jobs)\$\[\e[m'
+	 echo -n '\u\D{%l%M}$(weekletter)\w\[\e[1;31m\]$(__git_ps1_cleaner)\[\e[1;33m\]$(print_jobs)\$\[\e[m'
 	 has_hardstatus && echo -n '\e]2;\u@\H:\w [$$]\a'
 	 echo -n '\] '
 }
@@ -439,9 +442,9 @@ unhash() {
 ############ WRAPPERS
 ll() {
 	if [ $# -gt 1 ]; then
-		ls --color=auto -FlAthrd "$@"
+		ls --color=auto -ZFlAthrd "$@"
 	else
-		ls --color=auto -FlAthr  "$@"
+		ls --color=auto -ZFlAthr  "$@"
 	fi
 }
 lls() {
@@ -532,34 +535,54 @@ in_2_but_not_in_1() {
 		  IFS=:
 	 done
 }
-fwget() { # fwget [TIMEOUT [TRIES [URL]]]
-	TIMEOUT=${1:-10}	#default: wait 10 seconds
-	TRIES=${2:-1}		#default: try once
-	URL=${3:-http://www.google.com/}
-	/usr/bin/wget --tries=${TRIES} --timeout=${TIMEOUT} ${URL} -qO- 2>/dev/null
+fwget() { # fwget [TIMEOUT [TRIES [URL [PROXY]]]]
+	local TIMEOUT=${1:-20}	#default: wait 20 seconds
+	local RETRIES=${2:-0}		#default: try once
+	local URL=${3:-https://duckduckgo.com/}
+	if systemctl --quiet is-active tor &>/dev/null; then
+		 local p=${4:-http://127.0.0.1:8118}
+	else
+		 local p=${4:-}
+	fi
+	/usr/bin/curl --proxy "$4" --retry ${RETRIES} --max-time ${TIMEOUT} ${URL} -so- 2>/dev/null
 }
-test_network_once() {
-	 fwget "$@" | grep -iq 'feeling lucky'
+test_tor() {
+	fwget 10 1 http://duskgytldkxiuqc6.onion/ http://127.0.0.1:8118 | grep -iq rendezvous || \
+	fwget 10 1 http://kpvz7ki2v5agwt35.onion/ http://127.0.0.1:8118 | grep -iq hidden\ wiki || \
+	fwget 10 1 http://pubdrop4dw6rk3aq.onion/ http://127.0.0.1:8118 | grep -iq securedrop || \
+	fwget 10 1 http://3g2upl4pq6kufc4m.onion/ http://127.0.0.1:8118 | grep -iq "doesn't track you" || \
+	fwget 10 1 http://fncuwbiisyh6ak3i.onion/ http://127.0.0.1:8118 | grep -iq keybase
 }
-test_tor_once() {
-   https_proxy=http://127.0.0.1:8118 fwget ${1:-10} ${2:-1} \
-		 https://check.torproject.org/ | grep -iq congratulations
-}
-sleepinc() {
-	 local SLEEPINC=1.5
-	 echo_blue_n $( date +%a\ %H:%M:%S ) "$1"
-	 local end_msg=$2
-	 shift 2
-	 echo -n .
-	 until "$@"; do
-		  echo -n .
-		  sleep $SLEEPINC
-		  SLEEPINC=$(echo "scale=30; $SLEEPINC*1.2" | bc)
+test_network() {
+	 local tor=false verbose=false loopinc=45
+	 local loopnum=1 forever=false timeout=5
+	 for arg; do
+		  case "$arg" in
+				--verbose) verbose=true;;
+				-n*) loopnum="${arg##-n}";;
+				-t*) timeout="${arg##-t}";;
+				-w*) loopinc="${arg##-w}";;
+				*) echo_red "WEIRD ARG: $arg";;
+		  esac
 	 done
-	 echo_blue "$end_msg"
-}
-wait-for-network() {
-	 sleepinc "Testing for internet" " yay, internet is up!" test_network_once
+	 (( loopnum )) || loopnum=99 forever=true
+	 $forever && stamp "Looping every $loopinc until network failure..."
+	 local gateway=$(ip route | awk '/^default via/ { print $3}')
+	 [ "$gateway" ] || {
+		  echo_red "NO GATEWAY"
+		  return 1
+	 }
+	 systemctl --quiet is-active tor &>/dev/null && tor=true || echo_red "NO TOR - DISABLING TOR TEST"
+	 while (( loopnum )); do
+		  $verbose && echo -n .
+		  $forever && sleep "$loopinc" || let loopnum--
+		  if $tor; then
+				test_tor && continue || echo_red "CANNOT REACH TOR"
+		  fi
+		  fwget $timeout 2 https://duckduckgo.com/ '' | grep -iq "doesn't track you" && continue || echo_red "CANNOT REACH DUCKDUCKGO"
+		  ping -i 0.4 -c 5 -w 4 -nq "$gateway" &>/dev/null && continue || echo_red "CANNOT PING GATEWAY"
+		  return 1
+	 done
 }
 ramsize() { #returns size of system's ram in megabytes
 	 awk '/MemTotal:/ { printf ("%0.0f\n",$2/1024); }' /proc/meminfo
@@ -662,31 +685,20 @@ git_home_clone() {
 		  popd >/dev/null
 	 }
 }
-ssh_amend_host_trust() {
-	 echo_red "Not implemented"
-	 return 1
-
-	 askyn "You're about to fuck w/known_hosts. Wanna cancel?" && return 1
-
-	 # check args
-	 # dig hostnames
-	 # ssh-keygen -R [each]
-	 # ssh-keygen -R [each],[each]
-	 # ssh-keyscan -H [each] >> ~/.ssh/known_hosts
-}
 is() {
 	 [ -a "$2" ] || return 1
 	 local str arg
 	 case "$1" in
 		  '')		return 1;; # existential crisis...
-		  xz|xzip|pkg)
+		  xz|xzip)
 					str='^application/x-xz;';;
+		  pkg)
+				str='^application/x-(xz|tar);';; # repo-drop
 		  gz|gzip|db)
-					str='^application/x-gzip;';;
-		  c)		str='^text/x-c;';;
-		  xml)	str='^application/xml;';;
-		  zip)	str='^application/zip;';;
-		  dvd)	srt='^application/x-iso9660-image;';;
+					str='^application/x-gzip;';; # ckrepo repo-drop
+		  c)		str='^text/x-c;';; # ct
+		  plain)	str='^text/plain;';; # fit
+		  dvd)	srt='^application/x-iso9660-image;';; # mountdvd
 		  *)		for arg; do
 						[ -a "$arg" ] || return 1
 					done
@@ -696,71 +708,6 @@ is() {
 	 for arg; do
 		  file -bi "$arg" | grep -qiE "$str" \
 				|| return 1
-	 done
-}
-cross-arch-makepkg-conf() {
-	 local a=i686 orig=/etc/makepkg.conf
-	 for arg; do
-		  case "$arg" in
-				x86_64|x86-64|64|amd64)
-									a=x86_64; continue;;
-				i686|i386|32)	a=i686;   continue;;
-		  esac
-		  [ -a "$arg" ] && orig=$arg
-	 done
-	 sed -e 's/^CARCH=.*$/CARCH="'${a//-/_}'"/ig' \
-		  -e 's/-march=[^ ]*/-march='${a//_/-}'/ig' "$orig"
-}
-good-xml() {
-	 is xml "$1" || return 1
-	 cat "$1" | xml val -w -q -e - || return 1
-}
-xml-nice() {
-	 [ -w "$1" ] && local file=$1 suff=$(uniq_token) || return 1
-	 good-xml "$file" || return 1
-	 cat "$file" | xml tr /usr/share/ppz/abc.xslt | xml fo -s 2 > "$file.$suff"
-	 diff \
-		  <(cat "$file.$suff" | xml el -v - | sort -u) \
-		  <(cat "$file" | xml el -v - | sort -u) \
-		  && {
-
-		  # switch em
-		  mv -f "$file" "$file.$suff.b"
-		  mv -f "$file.$suff" "$file"
-		  rm -f "$file.$suff.b"
-
-	 } || rm -f "$file.$suff"
-}
-xmlns-args() { local xmlns prefix file IFS=$'\n'
-	 ns="" #namespace strings (pass to xml as -N)
-	 defns="" # default namespace prefix in xpaths
-
-	 good-xml "$1" && file=$1 || return 1
-
-	 # for every xmlns declaration in the file
-	 for xmlns in $(cat "$file" | grep -ioE 'xmlns(:[a-z0-9]+)?="[^"]*"' | sort -u); do
-#		  echo "DOING: $xmlns"
-		  # remove double-quotes
-		  xmlns=${xmlns//\"}
-
-		  if [ ${xmlns:5:1} = = ]; then
-				# it starts like xmlns=http://...
-				# so we set a "default namespace"
-				defns=defns:
-				xmlns=defns=${xmlns:6}
-		  else
-				# it starts like xmlns:foo=http://...
-				# so we remove 'xmlns:'
-				xmlns=${xmlns:6}
-				# if foo is rdf/RDF, make that the default prefix
-				prefix=${xmlns%%=*}
-				if [ ${prefix,,} = rdf ]; then
-					 defns=$prefix:
-				fi
-		  fi
-
-		  # add to namespace string
-		  ns=$ns" -N $xmlns"
 	 done
 }
 hms-to-secs() {
@@ -868,4 +815,47 @@ fa() { # "find all"
 		  }
 	 done
 	 find "$@" \! -type d -exec stat -c %N '{}' \; | awk '{gsub(/[’‘]/,"")}{color = (system("[ -f " $3 " ] ")  == 0) ? "\033[1;36m" : "\033[1;31m"; print $1 " " $2 " " color $3 "\033[22;39m"}'
+}
+sums() {
+    for hash in md5 sha256 sha512; do
+        ${hash}sum "$@"
+    done
+}
+filename_fitted() {
+    [ ${#1} -lt "$2" ] && echo "$1" || echo $(basename "$1") | colrm "$2"
+}
+vidlength() {
+    files=()
+    for arg; do
+        if [ -f "$arg" ]; then
+            files+=("$arg")
+        elif [ -d "$arg" ]; then
+            local IFS2=$IFS IFS='
+';          for file in $(find "$arg" -type f); do
+                files+=("$file")
+            done
+            IFS=$IFS2
+        else
+            echo "weird option: $arg"
+        fi
+    done
+    for f in "${files[@]}"; do
+        secs=$(ffprobe -i "$f" -show_entries format=duration -v quiet -of csv="p=0")
+        secs=${secs%%.*}
+        if [ "$secs" = 0 -o "$secs" = "" ] || ! [[ "$secs" =~ ^[0-9]+$ ]]; then
+            echo -n "         "
+        else
+            printf '% 2d:%02d:%02d ' $(($secs/3600)) $(($secs%3600/60)) $(($secs%60))
+        fi
+        echo $(filename_fitted "$f" $(( $(tput cols) - 9 )))
+    done
+}
+grexify() {
+    local tmpfile=/tmp/.$(uniq_token)
+    for arg; do
+        [ -f "$arg" ] || continue
+        mv -i "$arg" $tmpfile
+        grex $tmpfile >| "$arg"
+        rm -rf $tmpfile
+    done
 }
