@@ -279,7 +279,7 @@ clear_line() {
 }
 __git_ps1_cleaner() {
     [ "$(type -t __git_ps1)" = function ] || {
-        eval "__git_ps1_cleaner() {return;}"
+        eval "__git_ps1_cleaner() { return; }"
         return
     }
     local s=$(__git_ps1 %s | sed 's/^[a-z0-9-]*//i')
