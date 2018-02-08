@@ -33,6 +33,7 @@ export VISUAL=emacs
 export PROMPT_COMMAND='history -a'
 export XAUTHORITY=/tmp/.Xauthority.$USER
 export XDG_CONFIG_HOME=~/.config
+mesg n
 set completion-ignore-case On
 set completion-query-items 150
 set page-completions Off
