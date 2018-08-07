@@ -1,21 +1,21 @@
 ############# ABSTRACTIONS
-uniq_token()	{ echo $(date +%s).$$.$(printf "%05d" $RANDOM); }
-am_root()		{ [ "x$EUID" = "x0" ]; }
-say_and_do()	{ echo DOING: "$@"; "$@"; }
-return_arg1()	{ return "$1"; }
-ifn()				{ return "${1:-99}"; }
-return_out()	{ return $("$@" 2>/dev/null); }
-return_stdin()	{ read && return $REPLY; }
-isnt()			{ eval "$@"; [ $? -ne 0 ]; }
-wait_until()	{ while isnt "$@"; do sleep 0.5; done; }
-weekletter()	{ ARR=(S m t w T f s S); echo ${ARR[$(date +%u)]}; }
-func_exists()	{ declare -f -F "${1}" >/dev/null; }
-list_sorted()	{ for F; do echo "${F}"; done | sort -u; }
-print_jobs()	{ jobs | while read; do echo -n \*; done; }
-croak()			{ [ "$*" ] && echo_red "ERROR: $@"; exit 1; }
+uniq_token()   { echo $(date +%s).$$.$(printf "%05d" $RANDOM); }
+am_root()      { [ "x$EUID" = "x0" ]; }
+say_and_do()   { echo DOING: "$@"; "$@"; }
+return_arg1()   { return "$1"; }
+ifn()            { return "${1:-99}"; }
+return_out()   { return $("$@" 2>/dev/null); }
+return_stdin()   { read && return $REPLY; }
+isnt()         { eval "$@"; [ $? -ne 0 ]; }
+wait_until()   { while isnt "$@"; do sleep 0.5; done; }
+weekletter()   { ARR=(S m t w T f s S); echo ${ARR[$(date +%u)]}; }
+func_exists()   { declare -f -F "${1}" >/dev/null; }
+list_sorted()   { for F; do echo "${F}"; done | sort -u; }
+print_jobs()   { jobs | while read; do echo -n \*; done; }
+croak()         { [ "$*" ] && echo_red "ERROR: $@"; exit 1; }
 giveup_prompt() { askyn "$@" && continue 2 || break 2; }
-y()				{ local v="$1"; shift; "$@"; eval $v=$?; }
-z()				{ (( ${!1} )) && false || :; }
+y()            { local v="$1"; shift; "$@"; eval $v=$?; }
+z()            { (( ${!1} )) && false || :; }
 ############################
 ############################
 ############# PROCESS MANIP
@@ -24,216 +24,216 @@ z()				{ (( ${!1} )) && false || :; }
 process_exists() { return $(ps --pid $1 -o pid= &>/dev/null); }
 alias pid_exists="process_exists"
 ppid_from_pid() {
-	[ -z "$1" ] && return
-	[ -z "$2" ] || GREPTEXT=' | grep -i'"$2 "
-	ps -p "$1" -o ppid= $GREPTEXT | awk '{ print $1 }' # | tail -n -1
+   [ -z "$1" ] && return
+   [ -z "$2" ] || GREPTEXT=' | grep -i'"$2 "
+   ps -p "$1" -o ppid= $GREPTEXT | awk '{ print $1 }' # | tail -n -1
 }
 do_unto_others() { # usage: do_unto_others [niceness [ioniceness [pid [show]]]]
-	renice -n ${1:- 19}   ${3:- $$} >/dev/null
-	ionice -c ${2:- 3} -p ${3:- $$} >/dev/null
-	if [ "$4" = "show" ]; then ionice -p ${3:- $$}; fi # display what it accomplished...
+   renice -n ${1:- 19}   ${3:- $$} >/dev/null
+   ionice -c ${2:- 3} -p ${3:- $$} >/dev/null
+   if [ "$4" = "show" ]; then ionice -p ${3:- $$}; fi # display what it accomplished...
 }
 niceify_tree() { # usage: niceify_tree [pid [niceness [ioniceness]]]
-	local INDENT=$INDENT"   "
-	echo "${INDENT:3}"$( ps --pid $1 -o comm= )" "$(do_unto_others ${2:- 19} ${3:- 3} $1 show)
-	for CHILD in $( ps --ppid $1 -o pid= ); do
-		niceify_tree $CHILD ${2:- 19} ${3:- 3}
-	done
+   local INDENT=$INDENT"   "
+   echo "${INDENT:3}"$( ps --pid $1 -o comm= )" "$(do_unto_others ${2:- 19} ${3:- 3} $1 show)
+   for CHILD in $( ps --ppid $1 -o pid= ); do
+      niceify_tree $CHILD ${2:- 19} ${3:- 3}
+   done
 }
 family_therapy() {
-	 pid_exists $1 && INDENT="" niceify_tree $1 ${2:- 19} '3' || echo no such process
+    pid_exists $1 && INDENT="" niceify_tree $1 ${2:- 19} '3' || echo no such process
 }
 pacman_is_ancestor() {
-	 local CHECKPID=${1:-$$}
-	 CHECKPID=${CHECKPID// }
-	 ps -p ${CHECKPID} -o args= | grep -iq pacman && return
-	 [ "${CHECKPID}" = "1" ] && return 1
-	 pacman_is_ancestor $(ps -p ${CHECKPID} -o ppid=)
+    local CHECKPID=${1:-$$}
+    CHECKPID=${CHECKPID// }
+    ps -p ${CHECKPID} -o args= | grep -iq pacman && return
+    [ "${CHECKPID}" = "1" ] && return 1
+    pacman_is_ancestor $(ps -p ${CHECKPID} -o ppid=)
 }
 ############################
 ############################
 ############# FILE MANIP
 ############################
 ############################
-full_path()			 { readlink -f "$(dirname "$1")/$(basename "$1")"; }
-full_path_lax()	 { readlink -m "$(dirname "$1")/$(basename "$1")"; }
-full_path_strict() {	readlink -e "$(dirname "$1")/$(basename "$1")"; }
+full_path()          { readlink -f "$(dirname "$1")/$(basename "$1")"; }
+full_path_lax()    { readlink -m "$(dirname "$1")/$(basename "$1")"; }
+full_path_strict() {   readlink -e "$(dirname "$1")/$(basename "$1")"; }
 repermit() {
-	for TARGET; do
-		[ -e "$TARGET" ] || continue
-		find "$TARGET" -type d -exec chmod 750 {} \;
-		find "$TARGET" -type f -exec chmod 640 {} \;
-	done
+   for TARGET; do
+      [ -e "$TARGET" ] || continue
+      find "$TARGET" -type d -exec chmod 750 {} \;
+      find "$TARGET" -type f -exec chmod 640 {} \;
+   done
 }
 bootable() {
-	DATA=$( od -A x -j 510 -N 2 -w16 -t x2 "$1" | colrm 1 7 )
-	[ "$DATA" == "aa55" ] && echo "$1 is bootable" >&2 || {
-		echo "$1 is not bootable" >&2
-		return 1
-	}
+   DATA=$( od -A x -j 510 -N 2 -w16 -t x2 "$1" | colrm 1 7 )
+   [ "$DATA" == "aa55" ] && echo "$1 is bootable" >&2 || {
+      echo "$1 is not bootable" >&2
+      return 1
+   }
 }
 is_empty_dir() {
-	 D=$(find "$1" -maxdepth 0 -type d -empty)
-	 [ "$D" ]
+    D=$(find "$1" -maxdepth 0 -type d -empty)
+    [ "$D" ]
 }
 enforce_perms() {
-	 [[ "$1" =~ [0-7]{3} ]] || return 1 #perm string is valid
-	 [ -a "$2" ] || return 1            #file exists
-	 STATS=$(stat -c %a "$2")
-	 [[ "$1" == "$STATS" ]] || {
-		  chmod "$1" "$2" #chmod file if not set already
-	 }
+    [[ "$1" =~ [0-7]{3} ]] || return 1 #perm string is valid
+    [ -a "$2" ] || return 1            #file exists
+    STATS=$(stat -c %a "$2")
+    [[ "$1" == "$STATS" ]] || {
+        chmod "$1" "$2" #chmod file if not set already
+    }
 }
 remove_line_number() {
-	 sed -i "${1}"' s/^.*$//' "${2}"
+    sed -i "${1}"' s/^.*$//' "${2}"
 }
 biggest_files_in_dir() {
-	 local IFS=$'\n'; {
-		  for F in $(find "$@" -type f 2>/dev/null); do
-				du -sh "${F}"
-		  done
-	 } | sort -hu | tail -n 20
+    local IFS=$'\n'; {
+        for F in $(find "$@" -type f 2>/dev/null); do
+            du -sh "${F}"
+        done
+    } | sort -hu | tail -n 20
 }
 make_sure_its_mine() {
-	 local HOW=touch
-	 [ "$1" == 'mkdir' ] && {
-		  HOW=mkdir
-		  shift
-	 }
-	 local IT=${1}
-	 [ -z "$IT" ] && return 1 # empty = def no
-	 [ -O "$IT" ] && return 0 # owned = def yes
-	 [ "$IT" = /tmp ] && return 0
-	 [ -a "$IT" ] && return 1 # exists, not owned = def no
-	 make_sure_its_mine mkdir ${IT%/*} || return 1   # test parent
-	 $HOW $IT
+    local HOW=touch
+    [ "$1" == 'mkdir' ] && {
+        HOW=mkdir
+        shift
+    }
+    local IT=${1}
+    [ -z "$IT" ] && return 1 # empty = def no
+    [ -O "$IT" ] && return 0 # owned = def yes
+    [ "$IT" = /tmp ] && return 0
+    [ -a "$IT" ] && return 1 # exists, not owned = def no
+    make_sure_its_mine mkdir ${IT%/*} || return 1   # test parent
+    $HOW $IT
 }
 set_proper_histfile() {
-	 # this function sets the VARIABLE.
-	 HISTFILE=${HISTFILE:-$HOME/.bash_history}
+    # this function sets the VARIABLE.
+    HISTFILE=${HISTFILE:-$HOME/.bash_history}
 
-	 # either we have permission and it's been made/touched
-	 # or we have to use a /tmp file
-	 until make_sure_its_mine $HISTFILE; do
-		  # this is a security bug - will loop infinitely
-		  # if another user creates the file.
-		  # what we really need is to scan existing files first...
-		  HISTFILE=/tmp/.bash.history.$USER #.$(uniq_token)
-		  XAUTHORITY=/tmp/.Xauthority.xuser
-		  echo -n .
-		  sleep 0.4
-	 done
-	 export HISTFILE XAUTHORITY
+    # either we have permission and it's been made/touched
+    # or we have to use a /tmp file
+    until make_sure_its_mine $HISTFILE; do
+        # this is a security bug - will loop infinitely
+        # if another user creates the file.
+        # what we really need is to scan existing files first...
+        HISTFILE=/tmp/.bash.history.$USER #.$(uniq_token)
+        XAUTHORITY=/tmp/.Xauthority.xuser
+        echo -n .
+        sleep 0.4
+    done
+    export HISTFILE XAUTHORITY
 }
 first_to_exist() {
-	 return 1
-	 #this is fucked up
-	 PREFIX=$1
-	 c=0
-	 while let ++c; do
-					 LOCKDIR=/tmp/lock.file.first-to-exist
-					 mkdir ${LOCKDIR} 2>/dev/null || return
-		  [ -a "$PREFIX$c" ] || break
-	 done
-	 touch $PREFIX$c
-	 echo $PREFIX$c
+    return 1
+    #this is fucked up
+    PREFIX=$1
+    c=0
+    while let ++c; do
+                LOCKDIR=/tmp/lock.file.first-to-exist
+                mkdir ${LOCKDIR} 2>/dev/null || return
+        [ -a "$PREFIX$c" ] || break
+    done
+    touch $PREFIX$c
+    echo $PREFIX$c
 }
 alias | grep -iqE '^alias grex=' || {
-	 eval 'grex() { grep -iEvr '\''^[[:space:]]*(#|;|//|$)'\'' "${@}"; }'
+    eval 'grex() { grep -iEvr '\''^[[:space:]]*(#|;|//|$)'\'' "${@}"; }'
 }
 sameish() {
-	 [ -f "${1}" -a -f "${2}" -a -r "${1}" -a -r "${2}" ] || return 1
-	 cmp -s <(grex ${1}) <(grex ${2})
+    [ -f "${1}" -a -f "${2}" -a -r "${1}" -a -r "${2}" ] || return 1
+    cmp -s <(grex ${1}) <(grex ${2})
 }
 erases_nothing() {
-	 [ -a "${1}" -a -a "${2}" ] || return 1
-	 return $(comm -23 \
-		  <(grex ${1} | sort -u) \
-		  <(grex ${2} | sort -u) \
-		  2>/dev/null | wc -c)
+    [ -a "${1}" -a -a "${2}" ] || return 1
+    return $(comm -23 \
+        <(grex ${1} | sort -u) \
+        <(grex ${2} | sort -u) \
+        2>/dev/null | wc -c)
 }
 conffile_checkup() { # conffile_checkup OLDFILE NEWFILE
-	 # return vals:
-	 # 0 if file is changed
-	 # 1 if file was identical
-	 # 2 if file is retained but needs user input
-	 [ -f "$1" ] && [ -f "$2" ] || return 1
-	 OLDFILE="${1}"; NEWFILE="${2}"
-	 cmp -s ${OLDFILE} ${NEWFILE} && {
-		  rm -f ${NEWFILE}
-		  return 1
-	 }
-	 sameish ${OLDFILE} {$NEWFILE} || erases_nothing ${OLDFILE} ${NEWFILE} || {
-		  case "$(md5sum ${OLDFILE} | awk '{print $1}')" in
-				a9fdfec8397db36c3a52ac4870d04cf1|387f21f67b7bb8cf1bdd6999006c1dd4)
-					 echo_red identified sshd_config as a stock config
-					 mv -f $NEWFILE $OLDFILE
-					 return 0;;
-				*)	 echo_red HOW FILES DIFFER:
-					 diff ${OLDFILE} ${NEWFILE}
-					 echo_red MD5 was: $(md5sum ${OLDFILE});;
-		  esac
-		  askyn "Replace old w/new?" && {
-				mv -f $NEWFILE $OLDFILE
-				return 0
-		  } || {
-				echo_red "keeping ${OLDFILE}, deleting temp one"
-				rm -f ${NEWFILE}
-				return 1
-		  }
-	 } && {
-		  mv -f ${NEWFILE} ${OLDFILE}
-		  return 1
-	 } || {
-		  echo_red "you need to merge/replace from ${NEWFILE} yourself"
-		  return
-	 }
+    # return vals:
+    # 0 if file is changed
+    # 1 if file was identical
+    # 2 if file is retained but needs user input
+    [ -f "$1" ] && [ -f "$2" ] || return 1
+    OLDFILE="${1}"; NEWFILE="${2}"
+    cmp -s ${OLDFILE} ${NEWFILE} && {
+        rm -f ${NEWFILE}
+        return 1
+    }
+    sameish ${OLDFILE} {$NEWFILE} || erases_nothing ${OLDFILE} ${NEWFILE} || {
+        case "$(md5sum ${OLDFILE} | awk '{print $1}')" in
+            a9fdfec8397db36c3a52ac4870d04cf1|387f21f67b7bb8cf1bdd6999006c1dd4)
+                echo_red identified sshd_config as a stock config
+                mv -f $NEWFILE $OLDFILE
+                return 0;;
+            *)    echo_red HOW FILES DIFFER:
+                diff ${OLDFILE} ${NEWFILE}
+                echo_red MD5 was: $(md5sum ${OLDFILE});;
+        esac
+        askyn "Replace old w/new?" && {
+            mv -f $NEWFILE $OLDFILE
+            return 0
+        } || {
+            echo_red "keeping ${OLDFILE}, deleting temp one"
+            rm -f ${NEWFILE}
+            return 1
+        }
+    } && {
+        mv -f ${NEWFILE} ${OLDFILE}
+        return 1
+    } || {
+        echo_red "you need to merge/replace from ${NEWFILE} yourself"
+        return
+    }
 }
 fsconv() { #usage: fsconv 5mb in k; 1G in s;
-	 local STR=
-	 local DIVIS=b
-	 while [ "$1" ]; do
-		  case "$1" in
-				in) shift; DIVIS=$1;;
-				*)STR=$STR$1
-		  esac
-		  shift
-	 done
-	 echo "(1*${STR})/(1*$DIVIS)" | sed '
-			s/[^0-9bskmgtp./()*]//ig
-			s/b/*1/ig
-			s/s/*512/ig
-			s/k/*1024/ig
-			s/m/*1024*1024/ig
-			s/g/*1024*1024*1024/ig
-			s/t/*1024*1024*1024*1024/ig
-			s/p/*1024*1024*1024*1024*1024/ig
-			s/\*\([^0-9]\)/\1/ig
-	 ' | bc <(echo 'scale=0;obase=10;ibase=10;')
+    local STR=
+    local DIVIS=b
+    while [ "$1" ]; do
+        case "$1" in
+            in) shift; DIVIS=$1;;
+            *)STR=$STR$1
+        esac
+        shift
+    done
+    echo "(1*${STR})/(1*$DIVIS)" | sed '
+         s/[^0-9bskmgtp./()*]//ig
+         s/b/*1/ig
+         s/s/*512/ig
+         s/k/*1024/ig
+         s/m/*1024*1024/ig
+         s/g/*1024*1024*1024/ig
+         s/t/*1024*1024*1024*1024/ig
+         s/p/*1024*1024*1024*1024*1024/ig
+         s/\*\([^0-9]\)/\1/ig
+    ' | bc <(echo 'scale=0;obase=10;ibase=10;')
 }
 dd_with_progress() {
-	 local SLEEPSECS=5
-	 [[ "$1" =~ ^[0-9]+$ ]] && SLEEPSECS=$1 && shift
-	 dd "$@" &
-	 local DDPID=$!
-	 echo $'\n\n\n\n'
-	 while :; do
-		  sleep $SLEEPSECS
-		  ps --pid $DDPID -o pid= &>/dev/null || break
-		  echo -e "\e[3A"
-		  kill -SIGUSR1 $DDPID >/dev/null
-		  ps --pid $DDPID -o pid= &>/dev/null || echo $'\n\n\n\n'
-		  sleep 1
-	 done
+    local SLEEPSECS=5
+    [[ "$1" =~ ^[0-9]+$ ]] && SLEEPSECS=$1 && shift
+    dd "$@" &
+    local DDPID=$!
+    echo $'\n\n\n\n'
+    while :; do
+        sleep $SLEEPSECS
+        ps --pid $DDPID -o pid= &>/dev/null || break
+        echo -e "\e[3A"
+        kill -SIGUSR1 $DDPID >/dev/null
+        ps --pid $DDPID -o pid= &>/dev/null || echo $'\n\n\n\n'
+        sleep 1
+    done
 }
 ############ INTERACTIVE CONSOLE TRICKS
 ansi_colors=(black red green yellow blue magenta cyan white)
 c=${#ansi_colors[@]}
 while let c--; do
-	 eval echo_${ansi_colors[$c]}'()
-		{ echo -ne "\e[1;3'"$c"'m$@\e[m\n" >&2; }'
-	 eval echo_${ansi_colors[$c]}'_n()
-		{ echo -ne "\e[1;3'"$c"'m$@\e[m" >&2; }'
+    eval echo_${ansi_colors[$c]}'()
+      { echo -ne "\e[1;3'"$c"'m$@\e[m\n" >&2; }'
+    eval echo_${ansi_colors[$c]}'_n()
+      { echo -ne "\e[1;3'"$c"'m$@\e[m" >&2; }'
 done
 clear_input_buffer() {
     #example: clear_input_buffer "clearing input buffer..." "ok\n"
@@ -245,23 +245,23 @@ clear_input_buffer() {
     echo -ne "$2"
 }
 do_fail() {
-	 clear_input_buffer
+    clear_input_buffer
     read -p "$*" CHAR
     return 1
 }
 cursor_position() { # http://invisible-island.net/xterm/xterm.faq.html
-	 [ "$TERM" = dumb ] && {
-		  echo 0
-		  return 1
-	 }
-	 exec < /dev/tty
-	 oldstty=$(stty -g)
-	 stty raw -echo min 0
-	 echo -en "\033[6n" > /dev/tty
-	 IFS=';' read -r -d R -a pos
-	 stty $oldstty
-	 col=$((${pos[1]} - 1))
-	 echo $col
+    [ "$TERM" = dumb ] && {
+        echo 0
+        return 1
+    }
+    exec < /dev/tty
+    oldstty=$(stty -g)
+    stty raw -echo min 0
+    echo -en "\033[6n" > /dev/tty
+    IFS=';' read -r -d R -a pos
+    stty $oldstty
+    col=$((${pos[1]} - 1))
+    echo $col
 }
 at_line_start() { return $(cursor_position); }
 clear_echo() { at_line_start || echo; echo "$@"; }
@@ -270,12 +270,12 @@ comm_front() {
     [ "$1" -eq 0 ] || echo "[${1}] "
 }
 clear_line() {
-	 echo -ne "\r"
-	 let NUMCHARS=$( tput cols )
-	 while let NUMCHARS--; do
-		  echo -n ' '
-	 done
-	 echo -ne "\r"
+    echo -ne "\r"
+    let NUMCHARS=$( tput cols )
+    while let NUMCHARS--; do
+        echo -n ' '
+    done
+    echo -ne "\r"
 }
 __git_ps1_cleaner() {
     [ "$(type -t __git_ps1)" = function ] || {
@@ -286,140 +286,140 @@ __git_ps1_cleaner() {
     echo "${s##* }"
 }
 has_hardstatus() {
-	 # breaks when used first in subshell or with redirected output
-	 # so call it with NO redirections first - it replaces itself :D
-	 eval "has_hardstatus() { return 0; }"
-	 tput hs && return
-	 # how to read title?
-	 echo -en "\e]2;TESTING_TITLE\a"
-	 (( $(cursor_position) )) || { #means it got set
-		  #reset title
-		  return 0
-	 }
-	 # we failed, but still should delete text we just wrote...
-	 local chars_to_del=14
-	 while let chars_to_del--; do
-		  echo -en '\b \b'
-	 done
-	 eval "has_hardstatus() { return 1; }"
-	 return 1
+    # breaks when used first in subshell or with redirected output
+    # so call it with NO redirections first - it replaces itself :D
+    eval "has_hardstatus() { return 0; }"
+    tput hs && return
+    # how to read title?
+    echo -en "\e]2;TESTING_TITLE\a"
+    (( $(cursor_position) )) || { #means it got set
+        #reset title
+        return 0
+    }
+    # we failed, but still should delete text we just wrote...
+    local chars_to_del=14
+    while let chars_to_del--; do
+        echo -en '\b \b'
+    done
+    eval "has_hardstatus() { return 1; }"
+    return 1
 }
 appropriate_ps1() {
-	 # remember to call has_hardstatus FIRST with NO redirections or subshell
-	 [ "$TERM" = dumb ] || echo -n '$(comm_front $?)'
-	 echo -n '\u\D{%l%M}$(weekletter)\w\[\e[1;31m\]$(__git_ps1_cleaner)\[\e[1;33m\]$(print_jobs)\$\[\e[m'
-	 has_hardstatus && echo -n '\e]2;\u@\H:\w [$$]\a'
-	 echo -n '\] '
+    # remember to call has_hardstatus FIRST with NO redirections or subshell
+    [ "$TERM" = dumb ] || echo -n '$(comm_front $?)'
+    echo -n '\u\D{%l%M}$(weekletter)\w\[\e[1;31m\]$(__git_ps1_cleaner)\[\e[1;33m\]$(print_jobs)\$\[\e[m'
+    has_hardstatus && echo -n '\e]2;\u@\H:\w [$$]\a'
+    echo -n '\] '
 }
 countdown() {
    local COUNT=$1
-	local NUMCHARS=${#COUNT}
+   local NUMCHARS=${#COUNT}
    while let COUNT--; do
       echo -ne "  $COUNT  "
       sleep 1
       echo -ne "\b\b\b\b"
-		I=$NUMCHARS
-		while let --I; do
-			 echo -ne "\b"
-		done
+      I=$NUMCHARS
+      while let --I; do
+          echo -ne "\b"
+      done
    done
 }
 shell_is_interactive_test() {
-	 [[ "$(ps --pid $PPID -o args=)" =~ /bin/bash[[:space:]]+/etc/rc.sysinit ]] && return 1
-	 [ -t 0 ] && [ -t 1 ] && [ -t 2 ]
+    [[ "$(ps --pid $PPID -o args=)" =~ /bin/bash[[:space:]]+/etc/rc.sysinit ]] && return 1
+    [ -t 0 ] && [ -t 1 ] && [ -t 2 ]
 }
 shell_is_interactive() {
-	 shell_is_interactive_test
-	 local P=$?
-	 eval "shell_is_interactive() { return $P; }"
-	 return $P
+    shell_is_interactive_test
+    local P=$?
+    eval "shell_is_interactive() { return $P; }"
+    return $P
 }
 askyn() {
-	 echo
-	 # defaults to NO in non-interactive!
-	 # if in a script, "no" MUST be a safe answer!!
-	 shell_is_interactive || return 1
-	 clear_input_buffer
-	 read -N 1 -p $'\e[1;34m'"${*//	/}"$' [*/n]):\e[m ' USERINPUT
-	 case ${USERINPUT} in ''|'
+    echo
+    # defaults to NO in non-interactive!
+    # if in a script, "no" MUST be a safe answer!!
+    shell_is_interactive || return 1
+    clear_input_buffer
+    read -N 1 -p $'\e[1;34m'"${*//   /}"$' [*/n]):\e[m ' USERINPUT
+    case ${USERINPUT} in ''|'
 ') return 0;;
-		  n) echo && return 1;;
-		  *) echo && return 0
-	 esac
+        n) echo && return 1;;
+        *) echo && return 0
+    esac
 }
 pushtrap() {
-	 local C=0
-	 while let ++C; do
-		  local varname=TRAPSTACK_$C
-		  [ "${!varname}" ] || break
-		  [ "$C" -gt 1024 ] && return 1
-	 done
-	 eval ${varname}='$(trap)'
-	 [ "$*" ] && trap "$@"
+    local C=0
+    while let ++C; do
+        local varname=TRAPSTACK_$C
+        [ "${!varname}" ] || break
+        [ "$C" -gt 1024 ] && return 1
+    done
+    eval ${varname}='$(trap)'
+    [ "$*" ] && trap "$@"
 }
 poptrap() {
-	 [ "${TRAPSTACK_1}" ] || return
-	 local IFS=$' \t\n'
-	 local C=0
-	 while let ++C; do
-		  local varname=TRAPSTACK_$((C+1))
-		  [ "${!varname}" ] || varname=TRAPSTACK_$C && break
-		  [ "$C" -gt 1024 ] && return 1
-	 done
-	 trap - $(trap | while read; do echo ${REPLY##*\'}; done)
-	 #iterating through multiline var - "while read"
-	 #does not preserve all quoting!!!
-	 local traptmp="${!varname}"
-	 unset $varname
-	 while [ -n "${traptmp}" ]; do
-		  local shorter="${traptmp%%$'\n'*}"
-		  eval trap ${shorter:7}
-		  [ "${traptmp}" = "${traptmp//$'\n'/}" ] \
-				&& traptmp= \
-				|| traptmp="${traptmp#*$'\n'}"
-	 done
+    [ "${TRAPSTACK_1}" ] || return
+    local IFS=$' \t\n'
+    local C=0
+    while let ++C; do
+        local varname=TRAPSTACK_$((C+1))
+        [ "${!varname}" ] || varname=TRAPSTACK_$C && break
+        [ "$C" -gt 1024 ] && return 1
+    done
+    trap - $(trap | while read; do echo ${REPLY##*\'}; done)
+    #iterating through multiline var - "while read"
+    #does not preserve all quoting!!!
+    local traptmp="${!varname}"
+    unset $varname
+    while [ -n "${traptmp}" ]; do
+        local shorter="${traptmp%%$'\n'*}"
+        eval trap ${shorter:7}
+        [ "${traptmp}" = "${traptmp//$'\n'/}" ] \
+            && traptmp= \
+            || traptmp="${traptmp#*$'\n'}"
+    done
 }
 usetvar() { local ctxt temp; local confirm=0
-#	 lets user set var with default and interactive readline
-#	 USAGE: usetvar VARNAME 'prompt: ' "default val" 'val if cancelled'
-	 [ "$1" = confirm ] && { confirm=1; shift; }
-	 case "${3}" in
-		  ''|'	')	local DVAL=${!1};;
-		  BLANK)		local DVAL='';;
-		  *)			local DVAL=${3}
-	 esac
-	 (( $confirm )) && DVAL=
-	 [ -n "${4}" ] && {
-		  unset -v "${1}"
-		  eval $1='"${4}"'
-	 }
-	 shell_is_interactive || {
-#		  eval $1=NONINTERACTIVE
-		  return 1
-	 }
-	 pushtrap 'poptrap; echo; return;' INT QUIT
-	 clear_input_buffer
-	 while :; do
-		  read -ei "${DVAL}" -p $'\e[1;34m'"${2//	}"$'\e[m' $5 $6 $7 "${1}"
-		  RV=$?
-		  (( $confirm )) || break
-		  echo FIRST GO: @$DVAL@
-		  read -ei '' -p $'\e[1;34mOnce more, please: \e[m' $5 $6 $7 ctxt
-		  echo SECOND GO: @$DVAL@
-		  [ "$DVAL" = "$ctxt" ] && break
-		  echo_red "They did not match! Trying again!"
-	 done
-	 poptrap
-	 return $RV
+#    lets user set var with default and interactive readline
+#    USAGE: usetvar VARNAME 'prompt: ' "default val" 'val if cancelled'
+    [ "$1" = confirm ] && { confirm=1; shift; }
+    case "${3}" in
+        ''|'   ')   local DVAL=${!1};;
+        BLANK)      local DVAL='';;
+        *)         local DVAL=${3}
+    esac
+    (( $confirm )) && DVAL=
+    [ -n "${4}" ] && {
+        unset -v "${1}"
+        eval $1='"${4}"'
+    }
+    shell_is_interactive || {
+#        eval $1=NONINTERACTIVE
+        return 1
+    }
+    pushtrap 'poptrap; echo; return;' INT QUIT
+    clear_input_buffer
+    while :; do
+        read -ei "${DVAL}" -p $'\e[1;34m'"${2//   }"$'\e[m' $5 $6 $7 "${1}"
+        RV=$?
+        (( $confirm )) || break
+        echo FIRST GO: @$DVAL@
+        read -ei '' -p $'\e[1;34mOnce more, please: \e[m' $5 $6 $7 ctxt
+        echo SECOND GO: @$DVAL@
+        [ "$DVAL" = "$ctxt" ] && break
+        echo_red "They did not match! Trying again!"
+    done
+    poptrap
+    return $RV
 }
 commalist() {
-	 [ "$2" ] || return
-	 local A=
-	 echo -n '{'
-	 for A; do
-		  echo -n "$A,"
-	 done
-	 echo '}'
+    [ "$2" ] || return
+    local A=
+    echo -n '{'
+    for A; do
+        echo -n "$A,"
+    done
+    echo '}'
 }
 enhash() {
    KEY=${1^^}
@@ -441,380 +441,380 @@ unhash() {
 }
 ############ WRAPPERS
 ll() {
-	if [ $# -gt 1 ]; then
-		ls --color=auto -ZFlAthrd "$@"
-	else
-		ls --color=auto -ZFlAthr  "$@"
-	fi
+   if [ $# -gt 1 ]; then
+      ls --color=auto -ZFlAthrd "$@"
+   else
+      ls --color=auto -ZFlAthr  "$@"
+   fi
 }
 lls() {
-	ll | head -n 10
+   ll | head -n 10
 }
 make_bash_script() {
-	[ -f "$1" ] && return 1
-	echo	'#!/bin/bash' > "$1"
-	chmod +x "$1"
-	e "$1"
+   [ -f "$1" ] && return 1
+   echo   '#!/bin/bash' > "$1"
+   chmod +x "$1"
+   e "$1"
 }
 ups() {
-	apcaccess status | grep -Ei '^(status|linev|loadpct|bcharge|timeleft)'
+   apcaccess status | grep -Ei '^(status|linev|loadpct|bcharge|timeleft)'
 }
 woman() {
-	local IFS=$'\n'
-	[ "$1" ] && COMMAND="$@" || {
-		read -ep $'\e[1;34mEnter command to look up:\e[m ' COMMAND
-	}
-	type set_xtitle &>/dev/null || . /usr/share/ppz/bash.functions.xorg
-	set_xtitle "$COMMAND [woman]"
-	help "$COMMAND" 2>/dev/null && read || e\
-		--eval "(manual-entry \"$COMMAND\")"\
-		--eval '(kill-buffer-and-window)'
+   local IFS=$'\n'
+   [ "$1" ] && COMMAND="$@" || {
+      read -ep $'\e[1;34mEnter command to look up:\e[m ' COMMAND
+   }
+   type set_xtitle &>/dev/null || . /usr/share/ppz/bash.functions.xorg
+   set_xtitle "$COMMAND [woman]"
+   help "$COMMAND" 2>/dev/null && read || e\
+      --eval "(manual-entry \"$COMMAND\")"\
+      --eval '(kill-buffer-and-window)'
 }
 sep_by() {
-	 local SEP=$1
-	 shift
-	 echo -n "$1"
-	 shift
-	 for arg; do
-		  echo -n "$SEP$arg"
-	 done
+    local SEP=$1
+    shift
+    echo -n "$1"
+    shift
+    for arg; do
+        echo -n "$SEP$arg"
+    done
 }
 wf() {
-	local P REPLY IFS=:
-	pushd ~ >/dev/null
-	for P in $PATH; do
-		find "$P" 2>/dev/null | {
-			 while read; do
-				  stat -c %N "$REPLY" | tr -d \''`‘’'
-			 done
-		} | grep -i --color=auto -E $(sep_by \| "$@")
-	done
-	popd >/dev/null
+   local P REPLY IFS=:
+   pushd ~ >/dev/null
+   for P in $PATH; do
+      find "$P" 2>/dev/null | {
+          while read; do
+              stat -c %N "$REPLY" | tr -d \''`‘’'
+          done
+      } | grep -i --color=auto -E $(sep_by \| "$@")
+   done
+   popd >/dev/null
 }
 e() {
-	case "$TERM" in
-		 linux)                     emacs "$@";;
-		 *)     TERM=xterm-256color emacs "$@"
-	esac
+   case "$TERM" in
+       linux)                     emacs "$@";;
+       *)     TERM=xterm-256color emacs "$@"
+   esac
 }
 plyst() {
    pacman -Ss "$1" | tr '\n' '#' | sed 's%#    % %ig' | tr '#' '\n' | sed 's%^[a-z]*/%%i' | sort | awk '{
-		twotxt = ""
-		spaces = length($1)
-		maxl = 20
-		for ( i = maxl ; i > spaces ; i-- ) twotxt = twotxt " "
-		$2 = twotxt
-		print $0	
-	}'
+      twotxt = ""
+      spaces = length($1)
+      maxl = 20
+      for ( i = maxl ; i > spaces ; i-- ) twotxt = twotxt " "
+      $2 = twotxt
+      print $0   
+   }'
 }
 iptables-all() { local table
-	 for table in nat mangle raw filter; do
-		  echo_red $table:
-		  iptables -t $table -S
-		  #iptables -t filter	-L -v -x --line-numbers
-	 done
+    for table in nat mangle raw filter; do
+        echo_red $table:
+        iptables -t $table -S
+        #iptables -t filter   -L -v -x --line-numbers
+    done
 }
 run_in_temp_memdir() { #DELETE THIS?
-	[ "$UID" -eq 0 ] && return
-	INMEM=/tmp
-	[ -d ${INMEM} ] || return
-	local DIR="$INMEM"/$( uniq_token )
-	mkdir ${DIR}
-	pushd ${DIR}
-	"$@" #do_in_temp_memdir "$@"
-	popd
-	rm -rf ${DIR}
+   [ "$UID" -eq 0 ] && return
+   INMEM=/tmp
+   [ -d ${INMEM} ] || return
+   local DIR="$INMEM"/$( uniq_token )
+   mkdir ${DIR}
+   pushd ${DIR}
+   "$@" #do_in_temp_memdir "$@"
+   popd
+   rm -rf ${DIR}
 }
 in_2_but_not_in_1() {
-	 local IFS=:
-	 for P in $2; do
-		  IFS=' '
-		  P=$(readlink -e $P 2>/dev/null || echo INVALID)
-		  [[ $P == 'INVALID' ]] && continue
-		  [[ "$1" =~ (^|:)$P(:|$) ]] || echo $P
-		  IFS=:
-	 done
+    local IFS=:
+    for P in $2; do
+        IFS=' '
+        P=$(readlink -e $P 2>/dev/null || echo INVALID)
+        [[ $P == 'INVALID' ]] && continue
+        [[ "$1" =~ (^|:)$P(:|$) ]] || echo $P
+        IFS=:
+    done
 }
 fwget() { # fwget [TIMEOUT [TRIES [URL [PROXY]]]]
-	local TIMEOUT=${1:-20}	#default: wait 20 seconds
-	local RETRIES=${2:-0}		#default: try once
-	local URL=${3:-https://duckduckgo.com/}
-	if systemctl --quiet is-active tor &>/dev/null; then
-		 local p=${4:-http://127.0.0.1:8118}
-	else
-		 local p=${4:-}
-	fi
-	/usr/bin/curl --proxy "$4" --retry ${RETRIES} --max-time ${TIMEOUT} ${URL} -so- 2>/dev/null
+   local TIMEOUT=${1:-20}   #default: wait 20 seconds
+   local RETRIES=${2:-0}      #default: try once
+   local URL=${3:-https://duckduckgo.com/}
+   if systemctl --quiet is-active tor &>/dev/null; then
+       local p=${4:-http://127.0.0.1:8118}
+   else
+       local p=${4:-}
+   fi
+   /usr/bin/curl --proxy "$4" --retry ${RETRIES} --max-time ${TIMEOUT} ${URL} -so- 2>/dev/null
 }
 test_tor() {
-	fwget 10 1 http://duskgytldkxiuqc6.onion/ http://127.0.0.1:8118 | grep -iq rendezvous || \
-	fwget 10 1 http://kpvz7ki2v5agwt35.onion/ http://127.0.0.1:8118 | grep -iq hidden\ wiki || \
-	fwget 10 1 http://pubdrop4dw6rk3aq.onion/ http://127.0.0.1:8118 | grep -iq securedrop || \
-	fwget 10 1 http://3g2upl4pq6kufc4m.onion/ http://127.0.0.1:8118 | grep -iq "doesn't track you" || \
-	fwget 10 1 http://fncuwbiisyh6ak3i.onion/ http://127.0.0.1:8118 | grep -iq keybase
+   fwget 10 1 http://duskgytldkxiuqc6.onion/ http://127.0.0.1:8118 | grep -iq rendezvous || \
+   fwget 10 1 http://kpvz7ki2v5agwt35.onion/ http://127.0.0.1:8118 | grep -iq hidden\ wiki || \
+   fwget 10 1 http://pubdrop4dw6rk3aq.onion/ http://127.0.0.1:8118 | grep -iq securedrop || \
+   fwget 10 1 http://3g2upl4pq6kufc4m.onion/ http://127.0.0.1:8118 | grep -iq "doesn't track you" || \
+   fwget 10 1 http://fncuwbiisyh6ak3i.onion/ http://127.0.0.1:8118 | grep -iq keybase
 }
 test_network() {
-	 local tor=false verbose=false loopinc=45
-	 local loopnum=1 forever=false timeout=5
-	 for arg; do
-		  case "$arg" in
-				--verbose) verbose=true;;
-				-n*) loopnum="${arg##-n}";;
-				-t*) timeout="${arg##-t}";;
-				-w*) loopinc="${arg##-w}";;
-				*) echo_red "WEIRD ARG: $arg";;
-		  esac
-	 done
-	 (( loopnum )) || loopnum=99 forever=true
-	 $forever && stamp "Looping every $loopinc until network failure..."
-	 local gateway=$(ip route | awk '/^default via/ { print $3}')
-	 [ "$gateway" ] || {
-		  echo_red "NO GATEWAY"
-		  return 1
-	 }
-	 systemctl --quiet is-active tor &>/dev/null && tor=true || echo_red "NO TOR - DISABLING TOR TEST"
-	 while (( loopnum )); do
-		  $verbose && echo -n .
-		  $forever && sleep "$loopinc" || let loopnum--
-		  if $tor; then
-				test_tor && continue || echo_red "CANNOT REACH TOR"
-		  fi
-		  fwget $timeout 2 https://duckduckgo.com/ '' | grep -iq "doesn't track you" && continue || echo_red "CANNOT REACH DUCKDUCKGO"
-		  ping -i 0.4 -c 5 -w 4 -nq "$gateway" &>/dev/null && continue || echo_red "CANNOT PING GATEWAY"
-		  return 1
-	 done
+    local tor=false verbose=false loopinc=45
+    local loopnum=1 forever=false timeout=5
+    for arg; do
+        case "$arg" in
+            --verbose) verbose=true;;
+            -n*) loopnum="${arg##-n}";;
+            -t*) timeout="${arg##-t}";;
+            -w*) loopinc="${arg##-w}";;
+            *) echo_red "WEIRD ARG: $arg";;
+        esac
+    done
+    (( loopnum )) || loopnum=99 forever=true
+    $forever && stamp "Looping every $loopinc until network failure..."
+    local gateway=$(ip route | awk '/^default via/ { print $3}')
+    [ "$gateway" ] || {
+        echo_red "NO GATEWAY"
+        return 1
+    }
+    systemctl --quiet is-active tor &>/dev/null && tor=true || echo_red "NO TOR - DISABLING TOR TEST"
+    while (( loopnum )); do
+        $verbose && echo -n .
+        $forever && sleep "$loopinc" || let loopnum--
+        if $tor; then
+            test_tor && continue || echo_red "CANNOT REACH TOR"
+        fi
+        fwget $timeout 2 https://duckduckgo.com/ '' | grep -iq "doesn't track you" && continue || echo_red "CANNOT REACH DUCKDUCKGO"
+        ping -i 0.4 -c 5 -w 4 -nq "$gateway" &>/dev/null && continue || echo_red "CANNOT PING GATEWAY"
+        return 1
+    done
 }
 ramsize() { #returns size of system's ram in megabytes
-	 awk '/MemTotal:/ { printf ("%0.0f\n",$2/1024); }' /proc/meminfo
+    awk '/MemTotal:/ { printf ("%0.0f\n",$2/1024); }' /proc/meminfo
 }
 ramfree() { #returns ${1}% size of free ram in megabytes
-	 awk '/MemFree:/ { printf ("%0.0f\n",($2 * '${1}')/(1024 * 100)); }' /proc/meminfo
+    awk '/MemFree:/ { printf ("%0.0f\n",($2 * '${1}')/(1024 * 100)); }' /proc/meminfo
 }
 home_actual() {
-	 local U=${1:-${USER}}
-	 local H=$(awk 'BEGIN { FS = ":" } /^'${U}'/ { print $6 }' /etc/passwd)
-	 readlink -eq ${H} 2>/dev/null
+    local U=${1:-${USER}}
+    local H=$(awk 'BEGIN { FS = ":" } /^'${U}'/ { print $6 }' /etc/passwd)
+    readlink -eq ${H} 2>/dev/null
 }
 makepkg_flexi() {
-	 return
-	 local A=
-	 case "$1" in
-		  32|i686)		A=i686;			shift;continue;;
-		  64|x86_64)	A=x86_64;		shift;continue;;
-		  *)				A=$(uname -m)
-	 esac
-	 B=$(grep -iEc ^processor /proc/cpuinfo); let ++B
-	 # unfinished!
-	 #makepkg --config /etc/makepkg.conf.native'
+    return
+    local A=
+    case "$1" in
+        32|i686)      A=i686;         shift;continue;;
+        64|x86_64)   A=x86_64;      shift;continue;;
+        *)            A=$(uname -m)
+    esac
+    B=$(grep -iEc ^processor /proc/cpuinfo); let ++B
+    # unfinished!
+    #makepkg --config /etc/makepkg.conf.native'
 }
 screentitle_and_do() {
-	 echo -ne "\ek$USER: $*\e\\"
-	 "$@"
+    echo -ne "\ek$USER: $*\e\\"
+    "$@"
 }
 opsudo() { #opportunistic sudo
-	 am_root && "$@" || sudo "$@"
+    am_root && "$@" || sudo "$@"
 }
 strpad() { local str="$1"
-	 until [ "${#str}" -ge "$2" ]; do
-		  str="$3$str"
-	 done
-	 echo $str
+    until [ "${#str}" -ge "$2" ]; do
+        str="$3$str"
+    done
+    echo $str
 }
 vars_in_series() { local prefix n var width
-	 # hopefully dont need anymore, its an evil hack anyway
-	 prefix="$1"
-	 n=1
-	 width=0
-	 while let ++width; do
-		  var=${prefix}_$(strpad $n $width 0)
-		  [ "${!var}" ] && break
-		  [ $width -gt 5 ] && return 1
-	 done
-	 while :; do
-		  var=${prefix}_$(strpad $n $width 0)
-		  [ "${!var}" ] || break
-		  echo $var #: ${!var}
-		  let n++
-	 done
+    # hopefully dont need anymore, its an evil hack anyway
+    prefix="$1"
+    n=1
+    width=0
+    while let ++width; do
+        var=${prefix}_$(strpad $n $width 0)
+        [ "${!var}" ] && break
+        [ $width -gt 5 ] && return 1
+    done
+    while :; do
+        var=${prefix}_$(strpad $n $width 0)
+        [ "${!var}" ] || break
+        echo $var #: ${!var}
+        let n++
+    done
 }
 kernel_supports_luks() {
-	 zgrep -iqE 'CONFIG_CRYPTO_XTS=[my]' /proc/config.gz
+    zgrep -iqE 'CONFIG_CRYPTO_XTS=[my]' /proc/config.gz
 }
 encdev_from_user() { local u=${1:-$USER}
-	 awk '/^:/ { if (($2 == "user") && ($3 == "'"$u"'") && !($6 ~ /^\//)) {
-		sub(/\/.*$/,"",$6)
-		print $6
-	 } }' /etc/rc.conf	 
+    awk '/^:/ { if (($2 == "user") && ($3 == "'"$u"'") && !($6 ~ /^\//)) {
+      sub(/\/.*$/,"",$6)
+      print $6
+    } }' /etc/rc.conf    
 }
 ribbit() {
-	 local num=1
-	 [[ "$1" =~ ^[0-9]+$ ]] && {
-		  num=$1
-		  shift
-	 }
-	 echo_red "$@"
-	 continue $num
+    local num=1
+    [[ "$1" =~ ^[0-9]+$ ]] && {
+        num=$1
+        shift
+    }
+    echo_red "$@"
+    continue $num
 }
 chrooted() {
-	 # debugging echos, for now
-#	 echo "INIT SEES: $(stat -c %d:%i /proc/1/root/.)"
-#	 echo "WE SEE:    $(stat -c %d:%i /)"
-	 # why would we be chrooted and not root??
-	 am_root && [ "$(stat -c %d:%i /)" != "$(stat -c %d:%i /proc/1/root/.)" ]
+    # debugging echos, for now
+#    echo "INIT SEES: $(stat -c %d:%i /proc/1/root/.)"
+#    echo "WE SEE:    $(stat -c %d:%i /)"
+    # why would we be chrooted and not root??
+    am_root && [ "$(stat -c %d:%i /)" != "$(stat -c %d:%i /proc/1/root/.)" ]
 }
 gith() {
-	 git --work-tree ~ --git-dir ~/.git "$@"
+    git --work-tree ~ --git-dir ~/.git "$@"
 }
 # move to script
 git_home_clone() {
-	 if [ -a ~/.git ] || ! shell_is_interactive; then
-		  echo_red "Hell no!"
-		  return
-	 fi
-	 [ "$2" ] || [[ "$1" =~ ^[a-z]+@[a-z\.]+$ ]] || {
-		  echo_red "USAGE: git_home_clone user@host.com"
-		  return 1
-	 }
-	 askyn "Are you sure you want to overwrite ~/ with $1:\~/ ... ?" && {
-		  gith clone --bare "$1":\~/ ~/.git || return 1
-		  pushd ~ >/dev/null
-		  gith config --local core.bare false
-		  gith checkout -f
-		  chmod -R go-rx ~/.ssh
-		  gith glog -n $(($(tput lines)/5)) | colrm $(tput cols)
-		  popd >/dev/null
-	 }
+    if [ -a ~/.git ] || ! shell_is_interactive; then
+        echo_red "Hell no!"
+        return
+    fi
+    [ "$2" ] || [[ "$1" =~ ^[a-z]+@[a-z\.]+$ ]] || {
+        echo_red "USAGE: git_home_clone user@host.com"
+        return 1
+    }
+    askyn "Are you sure you want to overwrite ~/ with $1:\~/ ... ?" && {
+        gith clone --bare "$1":\~/ ~/.git || return 1
+        pushd ~ >/dev/null
+        gith config --local core.bare false
+        gith checkout -f
+        chmod -R go-rx ~/.ssh
+        gith glog -n $(($(tput lines)/5)) | colrm $(tput cols)
+        popd >/dev/null
+    }
 }
 is() {
-	 [ -a "$2" ] || return 1
-	 local str arg
-	 case "$1" in
-		  '')		return 1;; # existential crisis...
-		  xz|xzip)
-					str='^application/x-xz;';;
-		  pkg)
-				str='^application/x-(xz|tar);';; # repo-drop
-		  gz|gzip|db)
-					str='^application/x-gzip;';; # ckrepo repo-drop
-		  c)		str='^text/x-c;';; # ct
-		  plain)	str='^text/plain;';; # fit
-		  dvd)	srt='^application/x-iso9660-image;';; # mountdvd
-		  *)		for arg; do
-						[ -a "$arg" ] || return 1
-					done
-					return 0;;
-	 esac
-	 shift
-	 for arg; do
-		  file -bi "$arg" | grep -qiE "$str" \
-				|| return 1
-	 done
+    [ -a "$2" ] || return 1
+    local str arg
+    case "$1" in
+        '')      return 1;; # existential crisis...
+        xz|xzip)
+               str='^application/x-xz;';;
+        pkg)
+            str='^application/x-(xz|tar);';; # repo-drop
+        gz|gzip|db)
+               str='^application/x-gzip;';; # ckrepo repo-drop
+        c)      str='^text/x-c;';; # ct
+        plain)   str='^text/plain;';; # fit
+        dvd)   srt='^application/x-iso9660-image;';; # mountdvd
+        *)      for arg; do
+                  [ -a "$arg" ] || return 1
+               done
+               return 0;;
+    esac
+    shift
+    for arg; do
+        file -bi "$arg" | grep -qiE "$str" \
+            || return 1
+    done
 }
 hms-to-secs() {
-	 local multiplier=1 secs=0 string=$1 right
-	 while [[ "$string" =~ : ]]; do
-		  right="${string##*:}"
-		  string="${string%:*}"
-		  [[ "$right" =~ ^[0-9]+$ ]] || continue
-		  secs=$(( secs + (multiplier * right) ))
-		  multiplier=$(( multiplier * 60 ))
-	 done
-	 echo $secs
+    local multiplier=1 secs=0 string=$1 right
+    while [[ "$string" =~ : ]]; do
+        right="${string##*:}"
+        string="${string%:*}"
+        [[ "$right" =~ ^[0-9]+$ ]] || continue
+        secs=$(( secs + (multiplier * right) ))
+        multiplier=$(( multiplier * 60 ))
+    done
+    echo $secs
 }
 print-args() {
-	 echo "@$0@"
-	 for arg; do
-		  echo "	@$arg@"
-	 done
+    echo "@$0@"
+    for arg; do
+        echo "   @$arg@"
+    done
 }
 input_bad() {
-	 local line c=0
-	 cat <&0 | awk '{print}' | {
-		  while read line; do
-				let c++
-				echo "$line"
-		  done
-		  return $c
-	 }
+    local line c=0
+    cat <&0 | awk '{print}' | {
+        while read line; do
+            let c++
+            echo "$line"
+        done
+        return $c
+    }
 }
 ssh_host_resolv() {
-	 # if hostname has a ready alias, use that instead
-	 cat ~/.ssh/config | awk '
-		BEGIN {
-			host = ""
-			found = 0
-		}
-		$0 ~ /^Host '"$1"'$/ { print $2; found = 1; exit }
-		$1 ~ /^Host$/ {
-			host = $2
-		}
-		$0 ~ /^\s*HostName '"$1"'$/ { print host; found = 1; exit }
-		{ next }
-		END {
-			if (!found) {
-				print "'"$1"'"
-			}
-		}
-	'
+    # if hostname has a ready alias, use that instead
+    cat ~/.ssh/config | awk '
+      BEGIN {
+         host = ""
+         found = 0
+      }
+      $0 ~ /^Host '"$1"'$/ { print $2; found = 1; exit }
+      $1 ~ /^Host$/ {
+         host = $2
+      }
+      $0 ~ /^\s*HostName '"$1"'$/ { print host; found = 1; exit }
+      { next }
+      END {
+         if (!found) {
+            print "'"$1"'"
+         }
+      }
+   '
 }
 ssh_key_from_host() {
-	 # returns 1 if none, 0 and outputs path if so
-	 cat ~/.ssh/config | awk '
-		BEGIN {
-			rv = 1
-			found = 0
-		}
-		$1 ~ /^Host$/ {
-			if (found) exit
-			if ($2 ~ /^'"$1"'$/) found = 1
-		}
-		$1 ~ /^IdentityFile$/ {
-			if (found) {
-				print $2
-				rv = 0
-				exit
-			}
-		}
-		{ next }
-		END {
-			exit rv
-		}
-	'
+    # returns 1 if none, 0 and outputs path if so
+    cat ~/.ssh/config | awk '
+      BEGIN {
+         rv = 1
+         found = 0
+      }
+      $1 ~ /^Host$/ {
+         if (found) exit
+         if ($2 ~ /^'"$1"'$/) found = 1
+      }
+      $1 ~ /^IdentityFile$/ {
+         if (found) {
+            print $2
+            rv = 0
+            exit
+         }
+      }
+      { next }
+      END {
+         exit rv
+      }
+   '
 }
 stamp() {
-	 echo_green_n $(date '+%Y %b %e %a %T [%Z %z]')
-	 echo : "$@"
+    echo_green_n $(date '+%Y %b %e %a %T [%Z %z]')
+    echo : "$@"
 }
 glog() {
-	 git glog -n $(($(tput lines)/5)) "$@" | colrm $(tput cols)
+    git glog -n $(($(tput lines)/5)) "$@" | colrm $(tput cols)
 }
 nma() {
-	 local host=${1:-""}
-	 local event=${2:-""}
-	 local kf=~/.config/nma-api-key
-	 local resource=https://www.notifymyandroid.com/publicapi
-	 if read -t 0 -N 0; then
-		  cat <&0 | curl \
-				--data-urlencode "apikey@$kf" \
-				--data-urlencode "description@-" \
-				"${resource}/notify?event=${event}&application=${host}" &>/dev/null
-	 else
-		  curl --data-urlencode "apikey@$kf" \
-				"${resource}/notify?description=&event=${event}&application=${host}" &>/dev/null
-	 fi
+    local host=${1:-""}
+    local event=${2:-""}
+    local kf=~/.config/nma-api-key
+    local resource=https://www.notifymyandroid.com/publicapi
+    if read -t 0 -N 0; then
+        cat <&0 | curl \
+            --data-urlencode "apikey@$kf" \
+            --data-urlencode "description@-" \
+            "${resource}/notify?event=${event}&application=${host}" &>/dev/null
+    else
+        curl --data-urlencode "apikey@$kf" \
+            "${resource}/notify?description=&event=${event}&application=${host}" &>/dev/null
+    fi
 }
 dix() {
-	 diff <(grex "$1" | sort) <(grex "$2" | sort)
+    diff <(grex "$1" | sort) <(grex "$2" | sort)
 }
 fa() { # "find all"
-	 local arg
-	 for arg; do
-		  [ -d "$arg" ] || {
-				echo_red "NOT A DIR: $arg"
-				return 1
-		  }
-	 done
-	 find "$@" \! -type d -exec stat -c %N '{}' \; | awk '{gsub(/[’‘]/,"")}{color = (system("[ -f " $3 " ] ")  == 0) ? "\033[1;36m" : "\033[1;31m"; print $1 " " $2 " " color $3 "\033[22;39m"}'
+    local arg
+    for arg; do
+        [ -d "$arg" ] || {
+            echo_red "NOT A DIR: $arg"
+            return 1
+        }
+    done
+    find "$@" \! -type d -exec stat -c %N '{}' \; | awk '{gsub(/[’‘]/,"")}{color = (system("[ -f " $3 " ] ")  == 0) ? "\033[1;36m" : "\033[1;31m"; print $1 " " $2 " " color $3 "\033[22;39m"}'
 }
 sums() {
     for hash in md5 sha256 sha512; do
