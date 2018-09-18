@@ -165,7 +165,7 @@ conffile_checkup() { # conffile_checkup OLDFILE NEWFILE
     }
     sameish ${OLDFILE} {$NEWFILE} || erases_nothing ${OLDFILE} ${NEWFILE} || {
         case "$(md5sum ${OLDFILE} | awk '{print $1}')" in
-            a9fdfec8397db36c3a52ac4870d04cf1|387f21f67b7bb8cf1bdd6999006c1dd4)
+            a7f04a540d3ff10e7f18420074824031)
                 echo_red identified sshd_config as a stock config
                 mv -f $NEWFILE $OLDFILE
                 return 0;;
@@ -230,11 +230,10 @@ dd_with_progress() {
 ansi_colors=(black red green yellow blue magenta cyan white)
 c=${#ansi_colors[@]}
 while let c--; do
-    eval echo_${ansi_colors[$c]}'()
-      { echo -ne "\e[1;3'"$c"'m$@\e[m\n" >&2; }'
-    eval echo_${ansi_colors[$c]}'_n()
-      { echo -ne "\e[1;3'"$c"'m$@\e[m" >&2; }'
+    eval echo_${ansi_colors[$c]}'() { echo -ne "\e[1;3'"$c"'m$@\e[m\n" >&2; }'
+    eval echo_${ansi_colors[$c]}'_n() { echo -ne "\e[1;3'"$c"'m$@\e[m" >&2; }'
 done
+alias er=echo_red
 clear_input_buffer() {
     #example: clear_input_buffer "clearing input buffer..." "ok\n"
 
@@ -442,9 +441,9 @@ unhash() {
 ############ WRAPPERS
 ll() {
    if [ $# -gt 1 ]; then
-      ls --color=auto -ZFlAthrd "$@"
+      ls --color=auto -ZFlAthrsd "$@"
    else
-      ls --color=auto -ZFlAthr  "$@"
+      ls --color=auto -ZFlAthrs  "$@"
    fi
 }
 lls() {
@@ -551,6 +550,8 @@ test_tor() {
    fwget 10 1 http://kpvz7ki2v5agwt35.onion/ http://127.0.0.1:8118 | grep -iq hidden\ wiki || \
    fwget 10 1 http://pubdrop4dw6rk3aq.onion/ http://127.0.0.1:8118 | grep -iq securedrop || \
    fwget 10 1 http://3g2upl4pq6kufc4m.onion/ http://127.0.0.1:8118 | grep -iq "doesn't track you" || \
+   fwget 10 1 https://www.facebookcorewwwi.onion/ http://127.0.0.1:8118 | grep -iq "facebook" || \
+   fwget 10 1 https://www.nytimes3xbfgragh.onion/ http://127.0.0.1:8118 | grep -iq "The New York Times: Find breaking news, multimedia, reviews" || \
    fwget 10 1 http://fncuwbiisyh6ak3i.onion/ http://127.0.0.1:8118 | grep -iq keybase
 }
 test_network() {
@@ -640,11 +641,12 @@ vars_in_series() { local prefix n var width
 kernel_supports_luks() {
     zgrep -iqE 'CONFIG_CRYPTO_XTS=[my]' /proc/config.gz
 }
-encdev_from_user() { local u=${1:-$USER}
+encdev_from_user() { local u=$1
+    [[ "$u" =~ ^[a-z0-9]+$ ]] || return 1
     awk '/^:/ { if (($2 == "user") && ($3 == "'"$u"'") && !($6 ~ /^\//)) {
       sub(/\/.*$/,"",$6)
       print $6
-    } }' /etc/rc.conf    
+    } }' /etc/ppz.conf
 }
 ribbit() {
     local num=1
@@ -852,10 +854,44 @@ vidlength() {
 }
 grexify() {
     local tmpfile=/tmp/.$(uniq_token)
+    files=() equals_too=''
     for arg; do
-        [ -f "$arg" ] || continue
-        mv -i "$arg" $tmpfile
-        grex $tmpfile >| "$arg"
+        [ -f "$arg" ] && files+=("$arg") && continue
+        case "$arg" in
+            --equals) equals_too=y;; # also filters lines ending with =
+            *) echo "weird arg: $arg"
+        esac
+    done
+    for file in "${files[@]}"; do
+        mv -i "$file" $tmpfile
+        if [[ "$equals_too" ]]; then
+            grex $tmpfile | grep -vE '=$' >| "$file"
+        else
+            grex $tmpfile >| "$file"
+        fi
         rm -rf $tmpfile
     done
+}
+wehave() {
+    local arg= missing=()
+    for arg; do
+        pacman -Qq "$arg" &>/dev/null || missing+=("$arg")
+    done
+    if (( ${#missing[@]} )); then
+        echo_red "PACKAGES MISSING, PLEASE RUN: pacman -Syu ${missing[@]}"
+        return 1
+    fi
+}
+rs() {
+    rsync --inplace --out-format="%t %o %f ... %n" \
+          --info=flist0,progress2 --no-i-r --chmod=u+w,Du+x \
+          -Phe "ssh -S none" "$@"
+}
+isprime() {
+    [[ "$1" =~ ^[0-9]+$ ]] || return 1
+    local i=1 num=$((10#$1))
+    while let i++ && [ $i -lt $num ]; do
+        [ $(($num % $i)) -eq 0 ] && return 1
+    done
+    return 0
 }
