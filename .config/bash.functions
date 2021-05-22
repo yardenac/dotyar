@@ -1,5 +1,8 @@
 ############# ABSTRACTIONS
-uniq_token()   { echo $(date +%s).$$.$(printf "%05d" $RANDOM); }
+uniq_token()   {
+    local p=${1:-.}
+    echo $(date +%s)${p}"$$"${p}$(printf "%05d" $RANDOM)
+}
 am_root()      { [ "x$EUID" = "x0" ]; }
 say_and_do()   { echo DOING: "$@"; "$@"; }
 return_arg1()   { return "$1"; }
@@ -130,7 +133,8 @@ first_to_exist() {
     #this is fucked up
     PREFIX=$1
     c=0
-    while let ++c; do
+    while true; do
+        let ++c
                 LOCKDIR=/tmp/lock.file.first-to-exist
                 mkdir ${LOCKDIR} 2>/dev/null || return
         [ -a "$PREFIX$c" ] || break
@@ -230,7 +234,7 @@ dd_with_progress() {
 ansi_colors=(black red green yellow blue magenta cyan white)
 c=${#ansi_colors[@]}
 while let c--; do
-    eval echo_${ansi_colors[$c]}'() { echo -ne "\e[1;3'"$c"'m$@\e[m\n" >&2; }'
+    eval echo_${ansi_colors[$c]}'() { [ -n "$*" ] && echo -ne "\e[1;3'"$c"'m$@\e[m\n" >&2; :; }'
     eval echo_${ansi_colors[$c]}'_n() { echo -ne "\e[1;3'"$c"'m$@\e[m" >&2; }'
 done
 alias er=echo_red
@@ -268,9 +272,28 @@ comm_front() {
     [ $(cursor_position) -eq 0 ] || echo -en '\e[1;41m<->\e[m';
     [ "$1" -eq 0 ] || echo "[${1}] "
 }
+tputt() {
+    if [ "$TERM" ]; then
+        tput "$@"
+    else
+        tput -Tlinux "$@"
+    fi
+}
+echo_spaces_return() { # spaces until the end of the line
+    local char=0 cols=$(tputt cols) string=$*
+    while let cols--; do
+        if [ $char -lt ${#string} ]; then
+            echo -ne "${string:$char:1}"
+            let char++
+        else
+            echo -n ' '
+        fi
+    done
+    echo -ne '\r'
+}
 clear_line() {
     echo -ne "\r"
-    let NUMCHARS=$( tput cols )
+    let NUMCHARS=$( tputt cols )
     while let NUMCHARS--; do
         echo -n ' '
     done
@@ -281,14 +304,16 @@ __git_ps1_cleaner() {
         eval "__git_ps1_cleaner() { return; }"
         return
     }
-    local s=$(__git_ps1 %s | sed 's/^[a-z0-9-]*//i')
+    [ -a .git ] || return
+    [ "$(GIT_TRACE=0 git config --local user.autostatus 2>/dev/null)" == "false" ] && return
+    local s=$(GIT_TRACE=0 __git_ps1 %s | sed 's/^[a-z0-9-]*//i')
     echo "${s##* }"
 }
 has_hardstatus() {
     # breaks when used first in subshell or with redirected output
     # so call it with NO redirections first - it replaces itself :D
     eval "has_hardstatus() { return 0; }"
-    tput hs && return
+    tputt hs && return
     # how to read title?
     echo -en "\e]2;TESTING_TITLE\a"
     (( $(cursor_position) )) || { #means it got set
@@ -324,7 +349,7 @@ countdown() {
    done
 }
 shell_is_interactive_test() {
-    [[ "$(ps --pid $PPID -o args=)" =~ /bin/bash[[:space:]]+/etc/rc.sysinit ]] && return 1
+    [[ "$(ps --pid $PPID -o args=)" =~ /usr/bin/bash[[:space:]]+/etc/rc.sysinit ]] && return 1
     [ -t 0 ] && [ -t 1 ] && [ -t 2 ]
 }
 shell_is_interactive() {
@@ -346,38 +371,58 @@ askyn() {
         *) echo && return 0
     esac
 }
+_ALLTRAPS=(EXIT HUP QUIT INT TERM ABRT TSTP CONT)
+unset _TRAPEXITCODE
 pushtrap() {
-    local C=0
-    while let ++C; do
-        local varname=TRAPSTACK_$C
+    local C=0 varname=
+    while true; do
+        let ++C
+        varname=_TRAPSTACK_$C
         [ "${!varname}" ] || break
-        [ "$C" -gt 1024 ] && return 1
+        [ "$C" -gt 1024 ] && {
+            er "TRAP OVERFLOW"
+            return 1
+        }
     done
-    eval ${varname}='$(trap)'
-    [ "$*" ] && trap "$@"
+    eval ${varname}'=("$@")'
 }
 poptrap() {
-    [ "${TRAPSTACK_1}" ] || return
-    local IFS=$' \t\n'
+    [ "${_TRAPSTACK_1}" ] || return
+    local IFS=$' \t\n' C=0 varname=
+    while true; do
+        let ++C
+        varname=_TRAPSTACK_$C
+        [ "${!varname}" ] && continue
+        unset _TRAPSTACK_$((C-1))
+        break
+     done
+}
+listalltraps() {
     local C=0
-    while let ++C; do
-        local varname=TRAPSTACK_$((C+1))
-        [ "${!varname}" ] || varname=TRAPSTACK_$C && break
-        [ "$C" -gt 1024 ] && return 1
-    done
-    trap - $(trap | while read; do echo ${REPLY##*\'}; done)
-    #iterating through multiline var - "while read"
-    #does not preserve all quoting!!!
-    local traptmp="${!varname}"
-    unset $varname
-    while [ -n "${traptmp}" ]; do
-        local shorter="${traptmp%%$'\n'*}"
-        eval trap ${shorter:7}
-        [ "${traptmp}" = "${traptmp//$'\n'/}" ] \
-            && traptmp= \
-            || traptmp="${traptmp#*$'\n'}"
+    while true; do
+        let ++C
+        varname=_TRAPSTACK_$C
+        if [ "${!varname}" ]; then
+            eval echo '${'"${varname}"'[@]}'
+        else
+            return
+        fi
     done
 }
+runalltraps() {
+    local rv=$? C=0
+    while true; do
+        let ++C
+        varname=_TRAPSTACK_$C
+        if [ "${!varname}" ]; then
+            eval eval '${'"${varname}"'[@]}'
+        else
+            break
+        fi
+    done
+    exit ${_TRAPEXITCODE:-$rv}
+}
+trap "runalltraps;" "${_ALLTRAPS[@]}"
 usetvar() { local ctxt temp; local confirm=0
 #    lets user set var with default and interactive readline
 #    USAGE: usetvar VARNAME 'prompt: ' "default val" 'val if cancelled'
@@ -396,7 +441,6 @@ usetvar() { local ctxt temp; local confirm=0
 #        eval $1=NONINTERACTIVE
         return 1
     }
-    pushtrap 'poptrap; echo; return;' INT QUIT
     clear_input_buffer
     while :; do
         read -ei "${DVAL}" -p $'\e[1;34m'"${2//   }"$'\e[m' $5 $6 $7 "${1}"
@@ -408,7 +452,6 @@ usetvar() { local ctxt temp; local confirm=0
         [ "$DVAL" = "$ctxt" ] && break
         echo_red "They did not match! Trying again!"
     done
-    poptrap
     return $RV
 }
 commalist() {
@@ -451,23 +494,12 @@ lls() {
 }
 make_bash_script() {
    [ -f "$1" ] && return 1
-   echo   '#!/bin/bash' > "$1"
+   echo   '#!/usr/bin/bash' > "$1"
    chmod +x "$1"
    e "$1"
 }
 ups() {
    apcaccess status | grep -Ei '^(status|linev|loadpct|bcharge|timeleft)'
-}
-woman() {
-   local IFS=$'\n'
-   [ "$1" ] && COMMAND="$@" || {
-      read -ep $'\e[1;34mEnter command to look up:\e[m ' COMMAND
-   }
-   type set_xtitle &>/dev/null || . /usr/share/ppz/bash.functions.xorg
-   set_xtitle "$COMMAND [woman]"
-   help "$COMMAND" 2>/dev/null && read || e\
-      --eval "(manual-entry \"$COMMAND\")"\
-      --eval '(kill-buffer-and-window)'
 }
 sep_by() {
     local SEP=$1
@@ -534,56 +566,59 @@ in_2_but_not_in_1() {
         IFS=:
     done
 }
+random_in_range() {
+    local floor=$1 ceil=$2 howmany=${3:-1} try= a= arr=()
+    while [ "${#arr[@]}" -lt "$howmany" ]; do
+        try=$(( (RANDOM % (1+ceil-floor)) + floor ))
+        for a in "${arr[@]}"; do
+            [ "$a" = "$try" ] && continue
+        done
+        arr+=("$try")
+        echo "$try"
+    done
+}
 fwget() { # fwget [TIMEOUT [TRIES [URL [PROXY]]]]
    local TIMEOUT=${1:-20}   #default: wait 20 seconds
    local RETRIES=${2:-0}      #default: try once
    local URL=${3:-https://duckduckgo.com/}
    if systemctl --quiet is-active tor &>/dev/null; then
        local p=${4:-http://127.0.0.1:8118}
+       local {ALL,FTP,HTTP,HTTPS}_PROXY=$p
+       local {all,ftp,http,https}_proxy=$p
+       local no_proxy=
    else
+       local {ALL,FTP,HTTP,HTTPS}_PROXY=
+       local {all,ftp,http,https}_proxy=
+       local no_proxy='*'
        local p=${4:-}
    fi
-   /usr/bin/curl --proxy "$4" --retry ${RETRIES} --max-time ${TIMEOUT} ${URL} -so- 2>/dev/null
+   eval {ALL,FTP,HTTP,HTTPS}_PROXY=$p {all,ftp,http,https}_proxy=$p no_proxy=$no_proxy \
+        /usr/bin/curl --proxy "$p" --retry ${RETRIES} --max-time ${TIMEOUT} ${URL} -so- 2>/dev/null
 }
-test_tor() {
-   fwget 10 1 http://duskgytldkxiuqc6.onion/ http://127.0.0.1:8118 | grep -iq rendezvous || \
-   fwget 10 1 http://kpvz7ki2v5agwt35.onion/ http://127.0.0.1:8118 | grep -iq hidden\ wiki || \
-   fwget 10 1 http://pubdrop4dw6rk3aq.onion/ http://127.0.0.1:8118 | grep -iq securedrop || \
-   fwget 10 1 http://3g2upl4pq6kufc4m.onion/ http://127.0.0.1:8118 | grep -iq "doesn't track you" || \
-   fwget 10 1 https://www.facebookcorewwwi.onion/ http://127.0.0.1:8118 | grep -iq "facebook" || \
-   fwget 10 1 https://www.nytimes3xbfgragh.onion/ http://127.0.0.1:8118 | grep -iq "The New York Times: Find breaking news, multimedia, reviews" || \
-   fwget 10 1 http://fncuwbiisyh6ak3i.onion/ http://127.0.0.1:8118 | grep -iq keybase
+verbosely_say() {
+    local func=$1 yesmsg=$2
+    case "$yesmsg" in
+        defer) :;;
+        *) "$func" "$yesmsg";;
+    esac
 }
-test_network() {
-    local tor=false verbose=false loopinc=45
-    local loopnum=1 forever=false timeout=5
-    for arg; do
-        case "$arg" in
-            --verbose) verbose=true;;
-            -n*) loopnum="${arg##-n}";;
-            -t*) timeout="${arg##-t}";;
-            -w*) loopinc="${arg##-w}";;
-            *) echo_red "WEIRD ARG: $arg";;
-        esac
-    done
-    (( loopnum )) || loopnum=99 forever=true
-    $forever && stamp "Looping every $loopinc until network failure..."
-    local gateway=$(ip route | awk '/^default via/ { print $3}')
-    [ "$gateway" ] || {
-        echo_red "NO GATEWAY"
-        return 1
-    }
-    systemctl --quiet is-active tor &>/dev/null && tor=true || echo_red "NO TOR - DISABLING TOR TEST"
-    while (( loopnum )); do
-        $verbose && echo -n .
-        $forever && sleep "$loopinc" || let loopnum--
-        if $tor; then
-            test_tor && continue || echo_red "CANNOT REACH TOR"
+verbosely_deferred=false
+verbosely() {
+    local returncode=$1 verbosity=$2 yesmsg=$3 errmsg=$4
+    [[ "$yesmsg" =~ ^defer: ]] && {
+        if [ "$verbosity" = min ]; then
+            (( $returncode )) && echo_red "$errmsg"
+            return "$returncode"
+        else
+            yesmsg=${yesmsg#*:}
         fi
-        fwget $timeout 2 https://duckduckgo.com/ '' | grep -iq "doesn't track you" && continue || echo_red "CANNOT REACH DUCKDUCKGO"
-        ping -i 0.4 -c 5 -w 4 -nq "$gateway" &>/dev/null && continue || echo_red "CANNOT PING GATEWAY"
-        return 1
-    done
+    }
+    case "$verbosity" in
+        stamp)   (( $returncode )) && stamp red "$errmsg" || stamp green "$yesmsg";;
+        min|all) (( $returncode )) && echo_red "$errmsg" || echo_green "$yesmsg";;
+        errors)  (( $returncode )) && echo_red "$errmsg";;
+    esac
+    return $returncode
 }
 ramsize() { #returns size of system's ram in megabytes
     awk '/MemTotal:/ { printf ("%0.0f\n",$2/1024); }' /proc/meminfo
@@ -626,7 +661,8 @@ vars_in_series() { local prefix n var width
     prefix="$1"
     n=1
     width=0
-    while let ++width; do
+    while true; do
+        let ++width
         var=${prefix}_$(strpad $n $width 0)
         [ "${!var}" ] && break
         [ $width -gt 5 ] && return 1
@@ -683,7 +719,7 @@ git_home_clone() {
         gith config --local core.bare false
         gith checkout -f
         chmod -R go-rx ~/.ssh
-        gith glog -n $(($(tput lines)/5)) | colrm $(tput cols)
+        gith glog -n $(($(tputt lines)/5)) | colrm $(tputt cols)
         popd >/dev/null
     }
 }
@@ -694,10 +730,12 @@ is() {
         '')      return 1;; # existential crisis...
         xz|xzip)
                str='^application/x-xz;';;
+        zst|zstd)
+               str='^application/x-zstd;';;
         pkg)
             str='^application/x-(xz|tar);';; # repo-drop
         gz|gzip|db)
-               str='^application/x-gzip;';; # ckrepo repo-drop
+               str='^application/gzip;';; # ckrepo repo-drop
         c)      str='^text/x-c;';; # ct
         plain)   str='^text/plain;';; # fit
         dvd)   srt='^application/x-iso9660-image;';; # mountdvd
@@ -783,12 +821,31 @@ ssh_key_from_host() {
       }
    '
 }
+ssh_up() {
+    local host=$1
+    [ -S "$HOME/.ssh/ctl-$host" ] || return 1
+    echo "$host socket good"
+    timeout 20 ssh -O check "$host" 2>&1 | grep -qi 'master running' || return 1
+    echo "$host check good"
+    timeout 20 ssh "$host" true || return 1
+    echo "$host existing good"
+    return 0
+}
 stamp() {
-    echo_green_n $(date '+%Y %b %e %a %T [%Z %z]')
-    echo : "$@"
+    local c color=green
+    for c in "${ansi_colors[@]}"; do
+        if [ "$1" = "$c" ]; then
+            color=$c
+            shift
+            break
+        fi
+    done
+    [ -z "$*" ] && return
+    echo_${color}_n $(date '+%Y %b %e %a %T [%Z %z]')
+    echo : "$*"
 }
 glog() {
-    git glog -n $(($(tput lines)/5)) "$@" | colrm $(tput cols)
+    git glog -n $(($(tputt lines)/5)) "$@" | colrm $(tputt cols)
 }
 nma() {
     local host=${1:-""}
@@ -826,32 +883,6 @@ sums() {
 filename_fitted() {
     [ ${#1} -lt "$2" ] && echo "$1" || echo $(basename "$1") | colrm "$2"
 }
-vidlength() {
-    files=()
-    for arg; do
-        if [ -f "$arg" ]; then
-            files+=("$arg")
-        elif [ -d "$arg" ]; then
-            local IFS2=$IFS IFS='
-';          for file in $(find "$arg" -type f); do
-                files+=("$file")
-            done
-            IFS=$IFS2
-        else
-            echo "weird option: $arg"
-        fi
-    done
-    for f in "${files[@]}"; do
-        secs=$(ffprobe -i "$f" -show_entries format=duration -v quiet -of csv="p=0")
-        secs=${secs%%.*}
-        if [ "$secs" = 0 -o "$secs" = "" ] || ! [[ "$secs" =~ ^[0-9]+$ ]]; then
-            echo -n "         "
-        else
-            printf '% 2d:%02d:%02d ' $(($secs/3600)) $(($secs%3600/60)) $(($secs%60))
-        fi
-        echo $(filename_fitted "$f" $(( $(tput cols) - 9 )))
-    done
-}
 grexify() {
     local tmpfile=/tmp/.$(uniq_token)
     files=() equals_too=''
@@ -871,6 +902,14 @@ grexify() {
         fi
         rm -rf $tmpfile
     done
+}
+jshonify() {
+    local f="$1" tmpfile=/tmp/.$(uniq_token)
+    [ -O "$f" ] || return 1
+    cat "$f" | jshon &>/dev/null || return 1
+    mv -i "$f" $tmpfile
+    cat $tmpfile | jshon >| "$f"
+    rm -rf $tmpfile
 }
 wehave() {
     local arg= missing=()
@@ -894,4 +933,11 @@ isprime() {
         [ $(($num % $i)) -eq 0 ] && return 1
     done
     return 0
+}
+gi() {
+    git remote show | column
+    git branch --all --list --column=dense --no-merged
+    git status
+    git ls-files -v | /usr/bin/grep '^[[:lower:]]'
+    glog -n 3
 }
